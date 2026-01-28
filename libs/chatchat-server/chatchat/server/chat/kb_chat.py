@@ -73,6 +73,13 @@ async def kb_chat(query: str = Body(..., description="用户输入", examples=["
 
             if mode == "local_kb":
                 kb = KBServiceFactory.get_service_by_name(kb_name)
+                # #region agent log
+                import json, time
+                try:
+                    with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"kb_chat.py:76","message":"kb.check_embed_model call","data":{},"timestamp":int(time.time()*1000)}) + '\n')
+                except: pass
+                # #endregion
                 ok, msg = kb.check_embed_model()
                 if not ok:
                     raise ValueError(msg)
@@ -85,6 +92,13 @@ async def kb_chat(query: str = Body(..., description="用户输入", examples=["
                                                 metadata={})
                 source_documents = format_reference(kb_name, docs, api_address(is_public=True))
             elif mode == "temp_kb":
+                # #region agent log
+                import json, time
+                try:
+                    with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                        f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"E","location":"kb_chat.py:88","message":"check_embed_model call","data":{},"timestamp":int(time.time()*1000)}) + '\n')
+                except: pass
+                # #endregion
                 ok, msg = check_embed_model()
                 if not ok:
                     raise ValueError(msg)

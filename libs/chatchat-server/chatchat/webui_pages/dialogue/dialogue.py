@@ -8,7 +8,7 @@ from PIL import Image as PILImage
 from typing import Dict, List
 from urllib.parse import urlencode
 
-# from audio_recorder_streamlit import audio_recorder
+from audio_recorder_streamlit import audio_recorder
 import openai
 import streamlit as st
 import streamlit_antd_components as sac
@@ -206,10 +206,19 @@ def dialogue_page(
             use_agent = st.checkbox(
                 "启用Agent", help="请确保选择的模型具备Agent能力", key="use_agent"
             )
+            
+            # 语音功能开关
+            enable_tts = st.checkbox(
+                "🔊 启用语音播报", 
+                help="开启后，AI 回复将自动转为语音播放",
+                key="enable_tts",
+                value=False
+            )
 
             # 选择工具
             tools = list_tools(api)
             tool_names = ["None"] + list(tools)
+            use_mcp = False  # 默认值
             if use_agent:
                 use_mcp = st.checkbox("使用MCP", key="use_mcp")
                 # selected_tools = sac.checkbox(list(tools), format_func=lambda x: tools[x]["title"], label="选择工具",
@@ -346,17 +355,62 @@ def dialogue_page(
 
     # chat input
     with bottom():
-        cols = st.columns([1, 0.2, 15,  1])
+        cols = st.columns([1, 13, 1, 1])
         if cols[0].button(":gear:", help="模型配置"):
             widget_keys = ["platform", "llm_model", "temperature", "system_message"]
             chat_box.context_to_session(include=widget_keys)
             llm_model_setting()
+        
+        prompt = cols[1].chat_input(chat_input_placeholder, key="prompt")
+        
+        # 语音输入按钮（放在输入框右侧）
+        with cols[2]:
+            mic_audio = audio_recorder(
+                text="",
+                recording_color="#e74c3c",
+                neutral_color="#3498db",
+                icon_name="microphone",
+                icon_size="2x",
+                key="mic_audio"
+            )
+        
         if cols[-1].button(":wastebasket:", help="清空对话"):
             chat_box.reset_history()
             rerun()
-        # with cols[1]:
-        #     mic_audio = audio_recorder("", icon_size="2x", key="mic_audio")
-        prompt = cols[2].chat_input(chat_input_placeholder, key="prompt")
+    
+    # 处理语音输入：调用 ASR 将语音转为文本
+    if mic_audio is not None and len(mic_audio) > 0:
+        with st.spinner("🎤 正在识别语音..."):
+            try:
+                # 调用 ASR API
+                import io
+                audio_file = io.BytesIO(mic_audio)
+                audio_file.name = "audio.wav"
+                
+                files = {"file": ("audio.wav", audio_file, "audio/wav")}
+                data = {"model": "FunAudioLLM/SenseVoiceSmall", "language": "auto"}
+                
+                response = api.post(
+                    "/asr_tts/asr/transcribe",
+                    files=files,
+                    data=data
+                )
+                
+                if response and response.status_code == 200:
+                    result = response.json()
+                    if result.get("code") == 200:
+                        prompt = result.get("data", {}).get("text", "")
+                        st.success(f"✅ 识别结果：{prompt}")
+                    else:
+                        st.error(f"❌ ASR 错误：{result.get('msg')}")
+                        prompt = None
+                else:
+                    st.error("❌ ASR 请求失败")
+                    prompt = None
+            except Exception as e:
+                st.error(f"❌ ASR 出错：{str(e)}")
+                prompt = None
+    
     if prompt:
         history = get_messages_history(
             chat_model_config["llm_model"]
@@ -520,10 +574,37 @@ def dialogue_page(
                 st.error(e.body)
         else:
             try:
-                d =client.chat.completions.create(**params)
-                chat_box.update_msg(d.choices[0].message.content or "", streaming=False)
+                d = client.chat.completions.create(**params)
+                text = d.choices[0].message.content or ""
+                chat_box.update_msg(text, streaming=False)
             except Exception as e:
                 st.error(e.body)
+        
+        # 语音输出：将文本回复转为语音
+        if text and st.session_state.get("enable_tts", False):
+            with st.spinner("🔊 正在生成语音..."):
+                try:
+                    # 调用 TTS API
+                    tts_payload = {
+                        "text": text[:500],  # 限制长度，避免过长
+                        "model": "FunAudioLLM/CosyVoice2-0.5B",
+                        "voice": "FunAudioLLM/CosyVoice2-0.5B:alex",  # 音色格式：模型名:音色名
+                        "speed": 1.0,
+                        "response_format": "mp3"
+                    }
+                    
+                    response = api.post(
+                        "/asr_tts/tts/synthesize",
+                        json=tts_payload
+                    )
+                    
+                    if response and response.status_code == 200:
+                        audio_bytes = response.content
+                        st.audio(audio_bytes, format="audio/mpeg")
+                    else:
+                        st.warning("⚠️ TTS 生成失败")
+                except Exception as e:
+                    st.warning(f"⚠️ TTS 出错：{str(e)}")
 
         # if os.path.exists("tmp/image.jpg"):
         #     with open("tmp/image.jpg", "rb") as image_file:

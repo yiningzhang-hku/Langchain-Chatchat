@@ -2,6 +2,7 @@ from datetime import datetime
 import uuid
 from typing import List, Dict
 
+from audio_recorder_streamlit import audio_recorder
 import openai
 import streamlit as st
 import streamlit_antd_components as sac
@@ -107,6 +108,16 @@ def kb_chat(api: ApiRequest):
             ## Bge 模型会超过1
             score_threshold = st.slider("知识匹配分数阈值：", 0.0, 2.0, step=0.01, key="score_threshold")
             return_direct = st.checkbox("仅返回检索结果", key="return_direct")
+            
+            # 语音功能开关
+            st.divider()
+            enable_tts = st.checkbox(
+                "🔊 启用语音播报", 
+                help="开启后，AI 回复将自动转为语音播放",
+                key="enable_tts_kb",
+                value=False
+            )
+            st.write(f"DEBUG: checkbox value = {enable_tts}, session_state = {st.session_state.get('enable_tts_kb', 'NOT SET')}")
 
 
 
@@ -170,17 +181,57 @@ def kb_chat(api: ApiRequest):
 
     # chat input
     with bottom():
-        cols = st.columns([1, 0.2, 15,  1])
+        cols = st.columns([1, 13, 1, 1])
         if cols[0].button(":gear:", help="模型配置"):
             widget_keys = ["platform", "llm_model", "temperature", "system_message"]
             chat_box.context_to_session(include=widget_keys)
             llm_model_setting()
+        
+        prompt = cols[1].chat_input(chat_input_placeholder, key="prompt")
+        
+        # 语音输入按钮（放在输入框右侧）
+        with cols[2]:
+            mic_audio = audio_recorder(
+                text="",
+                recording_color="#e74c3c",
+                neutral_color="#3498db",
+                icon_name="microphone",
+                icon_size="2x",
+                key="mic_audio_kb"
+            )
+        
         if cols[-1].button(":wastebasket:", help="清空对话"):
             chat_box.reset_history()
             rerun()
-        # with cols[1]:
-        #     mic_audio = audio_recorder("", icon_size="2x", key="mic_audio")
-        prompt = cols[2].chat_input(chat_input_placeholder, key="prompt")
+    
+    # 处理语音输入
+    if mic_audio is not None and len(mic_audio) > 0:
+        with st.spinner("🎤 正在识别语音..."):
+            try:
+                import io
+                audio_file = io.BytesIO(mic_audio)
+                audio_file.name = "audio.wav"
+                
+                files = {"file": ("audio.wav", audio_file, "audio/wav")}
+                data = {"model": "FunAudioLLM/SenseVoiceSmall", "language": "auto"}
+                
+                response = api.post("/asr_tts/asr/transcribe", files=files, data=data)
+                
+                if response and response.status_code == 200:
+                    result = response.json()
+                    if result.get("code") == 200:
+                        prompt = result.get("data", {}).get("text", "")
+                        st.success(f"✅ 识别结果：{prompt}")
+                    else:
+                        st.error(f"❌ ASR 错误：{result.get('msg')}")
+                        prompt = None
+                else:
+                    st.error("❌ ASR 请求失败")
+                    prompt = None
+            except Exception as e:
+                st.error(f"❌ ASR 出错：{str(e)}")
+                prompt = None
+    
     if prompt:
         history = get_messages_history(ctx.get("history_len", 0))
         messages = history + [{"role": "user", "content": prompt}]
@@ -231,6 +282,39 @@ def kb_chat(api: ApiRequest):
                 text += d.choices[0].delta.content or ""
                 chat_box.update_msg(text.replace("\n", "\n\n"), streaming=True)
             chat_box.update_msg(text, streaming=False)
+            
+            # 语音输出：将文本回复转为语音（在流式输出完成后立即执行）
+            if text and st.session_state.get("enable_tts_kb", False):
+                st.write(f"DEBUG: 准备生成语音，text长度={len(text)}, 前50字符='{text[:50]}...'")
+                with st.spinner("🔊 正在生成语音..."):
+                    try:
+                        # 调用 TTS API
+                        tts_payload = {
+                            "text": text[:500],  # 限制长度，避免过长
+                            "model": "FunAudioLLM/CosyVoice2-0.5B",
+                            "voice": "FunAudioLLM/CosyVoice2-0.5B:alex",  # 音色格式：模型名:音色名
+                            "speed": 1.0,
+                            "response_format": "mp3"
+                        }
+                        
+                        st.write(f"DEBUG: 正在调用 TTS API，payload={tts_payload}")
+                        response = api.post(
+                            "/asr_tts/tts/synthesize",
+                            json=tts_payload
+                        )
+                        
+                        st.write(f"DEBUG: TTS API 返回，status_code={response.status_code if response else 'None'}")
+                        if response and response.status_code == 200:
+                            audio_bytes = response.content
+                            st.write(f"DEBUG: 收到音频，大小={len(audio_bytes)} bytes")
+                            st.audio(audio_bytes, format="audio/mpeg")
+                        else:
+                            st.warning("⚠️ TTS 生成失败")
+                    except Exception as e:
+                        st.error(f"⚠️ TTS 出错：{str(e)}")
+                        import traceback
+                        st.write(f"DEBUG: 异常详情:\n{traceback.format_exc()}")
+            
             # TODO: 搜索未配置API KEY时产生报错
         except Exception as e:
             st.error(e.body)

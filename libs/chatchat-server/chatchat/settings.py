@@ -174,6 +174,13 @@ class KBSettings(BaseFileSettings):
     KB_INFO: t.Dict[str, str] = {"samples": "关于本项目issue的解答"} # TODO: 都存在数据库了，这个配置项还有必要吗？
     """每个知识库的初始化介绍，用于在初始化知识库时显示和Agent调用，没写则没有介绍，不会被Agent调用。"""
 
+    # 面向不同岗位的知识库命名约定，供上游业务系统（如 Mockbook）按岗位选择目标知识库
+    INTERVIEW_KB_MAP: t.Dict[str, str] = {
+        "frontend": "interview_fe_knowledge",
+        "backend": "interview_be_knowledge",
+        "fullstack": "interview_fullstack_knowledge",
+    }
+
     kbs_config: t.Dict[str, t.Dict] = {
             "faiss": {},
             "milvus": {

@@ -353,15 +353,29 @@ def get_Embeddings(
         embed_model: str = None,
         local_wrap: bool = False,  # use local wrapped api
 ) -> Embeddings:
+    # #region agent log
+    import json, time
+    try:
+        with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"utils.py:352","message":"get_Embeddings entry","data":{"embed_model":embed_model,"local_wrap":local_wrap},"timestamp":int(time.time()*1000)}) + '\n')
+    except: pass
+    # #endregion
     from langchain_community.embeddings import OllamaEmbeddings
     from langchain_openai import OpenAIEmbeddings
 
     from chatchat.server.localai_embeddings import (
         LocalAIEmbeddings,
     )
+    from langchain_chatchat.embeddings.zhipuai import ZhipuAIEmbeddings
 
     embed_model = embed_model or get_default_embedding()
     model_info = get_model_info(model_name=embed_model)
+    # #region agent log
+    try:
+        with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"utils.py:365","message":"model_info retrieved","data":{"embed_model":embed_model,"model_info":str(model_info)},"timestamp":int(time.time()*1000)}) + '\n')
+    except: pass
+    # #endregion
     params = dict(model=embed_model)
     try:
         if local_wrap:
@@ -370,28 +384,82 @@ def get_Embeddings(
                 openai_api_key="EMPTY",
             )
         else:
+            # For local models (like siliconflow), handle empty/missing API keys
+            api_base_url = model_info.get("api_base_url")
+            api_key = model_info.get("api_key")
+            api_proxy = model_info.get("api_proxy")
+            
+            # Fix: If model_info is empty (model not found in config), fallback to default platform
+            if not model_info or not api_base_url:
+                # Try to get default platform (xinference) configuration
+                platforms = get_config_platforms()
+                default_platform = platforms.get("xinference") or (list(platforms.values())[0] if platforms else None)
+                if default_platform:
+                    api_base_url = default_platform.get("api_base_url")
+                    api_key = default_platform.get("api_key", "EMPTY")
+                    api_proxy = default_platform.get("api_proxy", "")
+                    logger.warning(f"Model '{embed_model}' not found in config, using default platform '{default_platform.get('platform_name')}' configuration")
+            
+            # Handle cases where API key is missing or empty for local models
+            if not api_key or api_key == "EMPTY" or len(api_key.strip()) == 0:
+                # For local models, use a placeholder API key
+                api_key = "EMPTY"
+            
             params.update(
-                openai_api_base=model_info.get("api_base_url"),
-                openai_api_key=model_info.get("api_key"),
-                openai_proxy=model_info.get("api_proxy"),
+                openai_api_base=api_base_url,
+                openai_api_key=api_key,
+                openai_proxy=api_proxy,
             )
-        if model_info.get("platform_type") == "openai":
+        # #region agent log
+        try:
+            with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"utils.py:402","message":"params before platform check","data":{"params":str(params),"platform_type":model_info.get("platform_type") if model_info else None},"timestamp":int(time.time()*1000)}) + '\n')
+        except: pass
+        # #endregion
+        platform_type = model_info.get("platform_type") if model_info else None
+        # If model_info is empty, assume xinference platform (default)
+        if not platform_type:
+            platforms = get_config_platforms()
+            default_platform = platforms.get("xinference") or (list(platforms.values())[0] if platforms else None)
+            platform_type = default_platform.get("platform_type") if default_platform else None
+        
+        if platform_type == "openai":
             return OpenAIEmbeddings(**params)
-        elif model_info.get("platform_type") == "ollama":
+        elif platform_type == "ollama":
             return OllamaEmbeddings(
-                base_url=model_info.get("api_base_url").replace("/v1", ""),
+                base_url=params.get("openai_api_base", "").replace("/v1", ""),
                 model=embed_model,
             )
-        elif model_info.get("platform_type") == "zhipuai":
+        elif platform_type == "zhipuai":
             return ZhipuAIEmbeddings(
-                base_url=model_info.get("api_base_url"),
-                api_key=model_info.get("api_key"),
-                zhipuai_proxy=model_info.get("api_proxy"),
+                base_url=params.get("openai_api_base", ""),
+                api_key=params.get("openai_api_key", "EMPTY"),
+                zhipuai_proxy=params.get("openai_proxy", ""),
                 model=embed_model,
             )
         else:
-            return LocalAIEmbeddings(**params)
+            # For LocalAI embeddings, ensure proper API key handling
+            # #region agent log
+            try:
+                with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"utils.py:405","message":"creating LocalAIEmbeddings","data":{"params":str(params)},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
+            result = LocalAIEmbeddings(**params)
+            # #region agent log
+            try:
+                with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"utils.py:405","message":"LocalAIEmbeddings created","data":{"api_base":result.openai_api_base,"model":result.model},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
+            return result
     except Exception as e:
+        # #region agent log
+        try:
+            with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"B","location":"utils.py:407","message":"get_Embeddings exception","data":{"embed_model":embed_model,"error":str(e)},"timestamp":int(time.time()*1000)}) + '\n')
+        except: pass
+        # #endregion
         logger.exception(f"failed to create Embeddings for model: {embed_model}.")
         raise e
 
@@ -400,12 +468,37 @@ def check_embed_model(embed_model: str = None) -> Tuple[bool, str]:
     '''
     check weather embed_model accessable, use default embed model if None
     '''
+    # #region agent log
+    import json, time
+    try:
+        with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"utils.py:411","message":"check_embed_model entry","data":{"embed_model":embed_model},"timestamp":int(time.time()*1000)}) + '\n')
+    except: pass
+    # #endregion
     embed_model = embed_model or get_default_embedding()
     embeddings = get_Embeddings(embed_model=embed_model)
     try:
+        # #region agent log
+        try:
+            with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"utils.py:418","message":"before embed_query call","data":{"embed_model":embed_model},"timestamp":int(time.time()*1000)}) + '\n')
+        except: pass
+        # #endregion
         embeddings.embed_query("this is a test")
+        # #region agent log
+        try:
+            with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"utils.py:418","message":"embed_query success","data":{"embed_model":embed_model},"timestamp":int(time.time()*1000)}) + '\n')
+        except: pass
+        # #endregion
         return True, ""
     except Exception as e:
+        # #region agent log
+        try:
+            with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"C","location":"utils.py:420","message":"embed_query failed","data":{"embed_model":embed_model,"error":str(e),"error_type":type(e).__name__},"timestamp":int(time.time()*1000)}) + '\n')
+        except: pass
+        # #endregion
         msg = f"failed to access embed model '{embed_model}': {e}"
         logger.error(msg)
         return False, msg

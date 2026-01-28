@@ -98,12 +98,40 @@ def _check_response(response: dict) -> dict:
 
 def embed_with_retry(embeddings: LocalAIEmbeddings, **kwargs: Any) -> Any:
     """Use tenacity to retry the embedding call."""
+    # #region agent log
+    import json, time
+    try:
+        with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+            f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"D","location":"localai_embeddings.py:99","message":"embed_with_retry entry","data":{"model":kwargs.get("model"),"api_base":getattr(embeddings,"openai_api_base",None)},"timestamp":int(time.time()*1000)}) + '\n')
+    except: pass
+    # #endregion
     retry_decorator = _create_retry_decorator(embeddings)
 
     @retry_decorator
     def _embed_with_retry(**kwargs: Any) -> Any:
-        response = embeddings.client.create(**kwargs)
-        return _check_response(response)
+        # #region agent log
+        try:
+            with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"localai_embeddings.py:105","message":"_embed_with_retry before client.create","data":{"model":kwargs.get("model")},"timestamp":int(time.time()*1000)}) + '\n')
+        except: pass
+        # #endregion
+        try:
+            response = embeddings.client.create(**kwargs)
+            # #region agent log
+            try:
+                with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"localai_embeddings.py:105","message":"client.create success","data":{"model":kwargs.get("model")},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
+            return _check_response(response)
+        except Exception as e:
+            # #region agent log
+            try:
+                with open(r'd:\projects\Langchain-Chatchat\.cursor\debug.log', 'a', encoding='utf-8') as f:
+                    f.write(json.dumps({"sessionId":"debug-session","runId":"run1","hypothesisId":"A","location":"localai_embeddings.py:105","message":"client.create failed","data":{"model":kwargs.get("model"),"error":str(e),"error_type":type(e).__name__},"timestamp":int(time.time()*1000)}) + '\n')
+            except: pass
+            # #endregion
+            raise
 
     return _embed_with_retry(**kwargs)
 
@@ -201,10 +229,20 @@ class LocalAIEmbeddings(BaseModel, Embeddings):
 
     @root_validator()
     def validate_environment(cls, values: Dict) -> Dict:
-        """Validate that api key and python package exists in environment."""
-        values["openai_api_key"] = get_from_dict_or_env(
-            values, "openai_api_key", "OPENAI_API_KEY"
-        )
+        """Validate that api key and python package exists in environment.
+        For local models, an empty or placeholder key is acceptable.
+        """
+        # Check if we have an explicit API key in the values, or try to get from env
+        openai_api_key = values.get("openai_api_key")
+        if openai_api_key is None:
+            # Try to get from environment, but allow empty/placeholder values for local models
+            try:
+                openai_api_key = get_from_dict_or_env(values, "openai_api_key", "OPENAI_API_KEY")
+            except ValueError:
+                # If not found in environment, use a placeholder for local models
+                openai_api_key = "EMPTY"
+        values["openai_api_key"] = openai_api_key
+        
         values["openai_api_base"] = get_from_dict_or_env(
             values,
             "openai_api_base",

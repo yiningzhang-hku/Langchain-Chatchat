@@ -2,6 +2,20 @@ import click
 from pathlib import Path
 import shutil
 import typing as t
+import os
+
+# 加载 .env 文件（如果存在）
+try:
+    from dotenv import load_dotenv
+    # 优先加载 CHATCHAT_ROOT 下的 .env，其次是当前目录
+    chatchat_root = Path(os.environ.get("CHATCHAT_ROOT", ".")).resolve()
+    env_file = chatchat_root / ".env"
+    if env_file.exists():
+        load_dotenv(env_file)
+    else:
+        load_dotenv()  # 尝试从当前目录或父目录查找
+except ImportError:
+    pass  # python-dotenv 未安装，跳过
 
 from chatchat.startup import main as startup_main
 from chatchat.init_database import main as kb_main, create_tables, folder2db
