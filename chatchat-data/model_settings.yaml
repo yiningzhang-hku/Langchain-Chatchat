@@ -1,0 +1,217 @@
+﻿# 模型配置文件
+
+
+# 默认选用的 LLM 名称
+DEFAULT_LLM_MODEL: Qwen/Qwen3-32B
+
+# 默认选用的 Embedding 名称
+DEFAULT_EMBEDDING_MODEL: Qwen/Qwen3-Embedding-8B
+
+# AgentLM 模型的名称（可以不指定，指定之后就锁定进入 Agent 之后的 Chain 的模型，不指定就用 DEFAULT_LLM_MODEL）
+Agent_MODEL: ''
+
+# 默认历史对话轮数
+HISTORY_LEN: 3
+
+# 大模型最长支持的长度，如果不填写，则使用模型默认的最大长度，如果填写，则为用户设定的最大长度
+MAX_TOKENS:
+
+# LLM 通用对话参数
+TEMPERATURE: 0.7
+
+# 支持的 Agent 模型
+SUPPORT_AGENT_MODELS:
+  - chatglm3-6b
+  - glm-4
+  - openai-api
+  - Qwen-2
+  - qwen2-instruct
+  - gpt-3.5-turbo
+  - gpt-4o
+
+# LLM 模型配置，包括了不同模态初始化参数
+# `model` 如果留空则自动使用 DEFAULT_LLM_MODEL
+LLM_MODEL_CONFIG:
+  preprocess_model:
+    model: ''
+    temperature: 0.05
+    max_tokens: 4096
+    history_len: 10
+    prompt_name: default
+    callbacks: false
+  llm_model:
+    model: ''
+    temperature: 0.9
+    max_tokens: 4096
+    history_len: 10
+    prompt_name: default
+    callbacks: true
+  action_model:
+    model: ''
+    temperature: 0.01
+    max_tokens: 4096
+    history_len: 10
+    prompt_name: ChatGLM3
+    callbacks: true
+  postprocess_model:
+    model: ''
+    temperature: 0.01
+    max_tokens: 4096
+    history_len: 10
+    prompt_name: default
+    callbacks: true
+  image_model:
+    model: sd-turbo
+    size: 256*256
+
+# ========================================
+# 模型加载平台配置
+# ========================================
+#
+# 平台配置说明：
+# - platform_name: 平台名称（自定义）
+# - platform_type: 平台类型，可选值：['xinference', 'ollama', 'oneapi', 'fastchat', 'openai', 'custom openai']
+# - api_base_url: OpenAI API URL
+# - api_key: API 密钥（如果需要）
+# - api_proxy: API 代理（可选）
+# - api_concurrencies: 该平台单模型最大并发数
+# - auto_detect_model: 是否自动获取平台可用模型列表。设为 True 时下方不同模型类型可自动检测
+# - llm_models: 该平台支持的大语言模型列表，auto_detect_model 设为 True 时自动检测
+# - embed_models: 该平台支持的嵌入模型列表，auto_detect_model 设为 True 时自动检测
+# - text2image_models: 该平台支持的图像生成模型列表，auto_detect_model 设为 True 时自动检测
+# - image2text_models: 该平台支持的多模态模型列表，auto_detect_model 设为 True 时自动检测
+# - rerank_models: 该平台支持的重排模型列表，auto_detect_model 设为 True 时自动检测
+# - speech2text_models: 该平台支持的 STT 模型列表，auto_detect_model 设为 True 时自动检测
+# - text2speech_models: 该平台支持的 TTS 模型列表，auto_detect_model 设为 True 时自动检测
+
+MODEL_PLATFORMS:
+  # ========================================
+  # Xinference 本地推理平台
+  # ========================================
+  - platform_name: xinference
+    platform_type: xinference
+    api_base_url: http://127.0.0.1:9997/v1
+    api_key: EMPTY
+    api_proxy: ''
+    api_concurrencies: 5
+    auto_detect_model: true  # 自动检测 Xinference 可用模型
+    llm_models: []
+    embed_models: []
+    text2image_models: []
+    image2text_models: []
+    rerank_models: []
+    speech2text_models: []
+    text2speech_models: []
+
+  # ========================================
+  # Ollama 本地推理平台
+  # ========================================
+  - platform_name: ollama
+    platform_type: ollama
+    api_base_url: http://127.0.0.1:11434/v1
+    api_key: EMPTY
+    api_proxy: ''
+    api_concurrencies: 5
+    auto_detect_model: false
+    llm_models:
+      - qwen:7b
+      - qwen2:7b
+    embed_models:
+      - quentinz/bge-large-zh-v1.5
+    text2image_models: []
+    image2text_models: []
+    rerank_models: []
+    speech2text_models: []
+    text2speech_models: []
+
+  # ========================================
+  # OneAPI 聚合平台
+  # ========================================
+  - platform_name: oneapi
+    platform_type: oneapi
+    api_base_url: http://127.0.0.1:3000/v1
+    api_key: sk-
+    api_proxy: ''
+    api_concurrencies: 5
+    auto_detect_model: false
+    llm_models:
+      - chatglm_pro
+      - chatglm_turbo
+      - chatglm_std
+      - chatglm_lite
+      - qwen-turbo
+      - qwen-plus
+      - qwen-max
+      - qwen-max-longcontext
+      - ERNIE-Bot
+      - ERNIE-Bot-turbo
+      - ERNIE-Bot-4
+      - SparkDesk
+    embed_models:
+      - text-embedding-v1
+      - Embedding-V1
+    text2image_models: []
+    image2text_models: []
+    rerank_models: []
+    speech2text_models: []
+    text2speech_models: []
+
+  # ========================================
+  # OpenAI 官方平台
+  # ========================================
+  - platform_name: openai
+    platform_type: openai
+    api_base_url: https://api.openai.com/v1
+    api_key: sk-proj-
+    api_proxy: ''
+    api_concurrencies: 5
+    auto_detect_model: false
+    llm_models:
+      - gpt-4o
+      - gpt-3.5-turbo
+    embed_models:
+      - text-embedding-3-small
+      - text-embedding-3-large
+    text2image_models: []
+    image2text_models: []
+    rerank_models: []
+    speech2text_models: []
+    text2speech_models: []
+
+  # ========================================
+  # 硅基流动（SiliconFlow）- ASR/TTS/Reranker
+  # ========================================
+  - platform_name: siliconflow
+    platform_type: openai
+    api_base_url: https://api.siliconflow.cn/v1
+    api_key: sk-poqqzetjxjsnlyflfaxsphnppelekozfwbhzwwgnsubpkcqo
+    api_proxy: ''
+    api_concurrencies: 5
+    auto_detect_model: false
+    
+    # LLM 模型
+    llm_models:
+      - Qwen/Qwen3-32B
+    
+    # Embedding 模型
+    embed_models:
+      - Qwen/Qwen3-Embedding-8B
+    
+    # 图像生成模型
+    text2image_models: []
+    
+    # 多模态模型
+    image2text_models: []
+    
+    # Reranker 重排序模型（用于 RAG 优化）
+    rerank_models:
+      - BAAI/bge-reranker-v2-m3
+      - BAAI/bge-reranker-base
+    
+    # ASR 语音识别模型
+    speech2text_models:
+      - FunAudioLLM/SenseVoiceSmall
+    
+    # TTS 语音合成模型
+    text2speech_models:
+      - FunAudioLLM/CosyVoice2-0.5B
